@@ -113,7 +113,13 @@ class TikTokBaseIE(InfoExtractor):
                 'source_preference': -2 if 'aweme/v1' in url else -1,  # Downloads from API might get blocked
                 **add_meta, **parsed_meta,
                 'format_note': join_nonempty(
-                    add_meta.get('format_note'), '(API)' if 'aweme/v1' in url else None, delim=' ')
+                    add_meta.get('format_note'), '(API)' if 'aweme/v1' in url else None, delim=' '),
+                'http_headers': {
+                    'User-Agent': 'ttplayer(2.10.47.110),AVMDL-1.1.47.33-boringssl-ANDROID',
+                    'x-mem-cache': '1',
+                    'x-reqtype': 'play',
+                    'x-speedtest-timeinternal': '1',
+                }
             } for url in addr.get('url_list') or []]
 
         # Hack: Add direct video links first to prioritize them when removing duplicate formats
@@ -381,46 +387,7 @@ class TikTokIE(TikTokBaseIE):
         raise ExtractorError('Video not available', video_id=video_id)
 
 
-class TikTokUserIE(TikTokBaseIE):
-    IE_NAME = 'tiktok:user'
-    _VALID_URL = r'https?://(?:www\.)?tiktok\.com/@(?P<id>[\w\.-]+)/?(?:$|[#?])'
-    _TESTS = [{
-        'url': 'https://tiktok.com/@corgibobaa?lang=en',
-        'playlist_mincount': 45,
-        'info_dict': {
-            'id': '6935371178089399301',
-            'title': 'corgibobaa',
-        },
-        'expected_warnings': ['Retrying']
-    }, {
-        'url': 'https://www.tiktok.com/@meme',
-        'playlist_mincount': 593,
-        'info_dict': {
-            'id': '79005827461758976',
-            'title': 'meme',
-        },
-        'expected_warnings': ['Retrying']
-    }]
-
-    r'''  # TODO: Fix by adding _signature to api_url
-    def _entries(self, webpage, user_id, username):
-        secuid = self._search_regex(r'\"secUid\":\"(?P<secUid>[^\"]+)', webpage, username)
-        verifyfp_cookie = self._get_cookies('https://www.tiktok.com').get('s_v_web_id')
-        if not verifyfp_cookie:
-            raise ExtractorError('Improper cookies (missing s_v_web_id).', expected=True)
-        api_url = f'https://m.tiktok.com/api/post/item_list/?aid=1988&cookie_enabled=true&count=30&verifyFp={verifyfp_cookie.value}&secUid={secuid}&cursor='
-        cursor = '0'
-        for page in itertools.count():
-            data_json = self._download_json(api_url + cursor, username, note='Downloading Page %d' % page)
-            for video in data_json.get('itemList', []):
-                video_id = video['id']
-                video_url = f'https://www.tiktok.com/@{user_id}/video/{video_id}'
-                yield self._url_result(video_url, 'TikTok', video_id, str_or_none(video.get('desc')))
-            if not data_json.get('hasMore'):
-                break
-            cursor = data_json['cursor']
-    '''
-
+class TikTokUserBaseIE(TikTokBaseIE):
     def _entries_api(self, webpage, user_id, username):
         query = {
             'user_id': user_id,
@@ -435,7 +402,7 @@ class TikTokUserIE(TikTokBaseIE):
         for page in itertools.count(1):
             for retries in itertools.count():
                 try:
-                    post_list = self._call_api('aweme/post', query, username,
+                    post_list = self._call_api(self._API_ENDPOINT, query, username,
                                                note='Downloading user video list page %d%s' % (page, f' (attempt {retries})' if retries != 0 else ''),
                                                errnote='Unable to download user video list')
                 except ExtractorError as e:
@@ -457,11 +424,79 @@ class TikTokUserIE(TikTokBaseIE):
 
     def _real_extract(self, url):
         user_name = self._match_id(url)
-        webpage = self._download_webpage(url, user_name, headers={
+        webpage = self._download_webpage(f'https://www.tiktok.com/@{user_name}', user_name, headers={
             'User-Agent': 'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)'
         })
         user_id = self._html_search_regex(r'snssdk\d*://user/profile/(\d+)', webpage, 'user ID')
         return self.playlist_result(self._entries_api(webpage, user_id, user_name), user_id, user_name)
+
+
+class TikTokUserIE(TikTokUserBaseIE):
+    IE_NAME = 'tiktok:user'
+    _API_ENDPOINT = 'aweme/post'
+    _VALID_URL = r'(?:https?://(?:www\.)?tiktok\.com/@|ttuser:)(?P<id>[\w\.-]+)'
+    _TESTS = [{
+        'url': 'https://tiktok.com/@corgibobaa?lang=en',
+        'playlist_mincount': 45,
+        'info_dict': {
+            'id': '6935371178089399301',
+            'title': 'corgibobaa',
+        },
+        'expected_warnings': ['Retrying']
+    }, {
+        'url': 'https://www.tiktok.com/@meme',
+        'playlist_mincount': 593,
+        'info_dict': {
+            'id': '79005827461758976',
+            'title': 'meme',
+        },
+        'expected_warnings': ['Retrying']
+    }]
+
+    @classmethod
+    def suitable(cls, url):
+        return False if TikTokIE.suitable(url) else super(TikTokUserIE, cls).suitable(url)
+
+    r'''  # TODO: Fix by adding _signature to api_url
+    def _entries(self, webpage, user_id, username):
+        secuid = self._search_regex(r'\"secUid\":\"(?P<secUid>[^\"]+)', webpage, username)
+        verifyfp_cookie = self._get_cookies('https://www.tiktok.com').get('s_v_web_id')
+        if not verifyfp_cookie:
+            raise ExtractorError('Improper cookies (missing s_v_web_id).', expected=True)
+        api_url = f'https://m.tiktok.com/api/post/item_list/?aid=1988&cookie_enabled=true&count=30&verifyFp={verifyfp_cookie.value}&secUid={secuid}&cursor='
+        cursor = '0'
+        for page in itertools.count():
+            data_json = self._download_json(api_url + cursor, username, note='Downloading Page %d' % page)
+            for video in data_json.get('itemList', []):
+                video_id = video['id']
+                video_url = f'https://www.tiktok.com/@{user_id}/video/{video_id}'
+                yield self._url_result(video_url, 'TikTok', video_id, str_or_none(video.get('desc')))
+            if not data_json.get('hasMore'):
+                break
+            cursor = data_json['cursor']
+    '''
+
+class TikTokUserLikedIE(TikTokUserBaseIE):
+    IE_NAME = 'tiktok:user:liked'
+    _API_ENDPOINT = 'aweme/favorite'
+    _VALID_URL = r'ttliked:(?P<id>[\w\.-]+)'
+    _TESTS = [{
+        'url': 'https://tiktok.com/@corgibobaa?lang=en',
+        'playlist_mincount': 45,
+        'info_dict': {
+            'id': '6935371178089399301',
+            'title': 'corgibobaa',
+        },
+        'expected_warnings': ['Retrying']
+    }, {
+        'url': 'https://www.tiktok.com/@meme',
+        'playlist_mincount': 593,
+        'info_dict': {
+            'id': '79005827461758976',
+            'title': 'meme',
+        },
+        'expected_warnings': ['Retrying']
+    }]
 
 
 class TikTokBaseListIE(TikTokBaseIE):

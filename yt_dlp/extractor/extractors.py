@@ -1538,6 +1538,7 @@ from .threeqsdn import ThreeQSDNIE
 from .tiktok import (
     TikTokIE,
     TikTokUserIE,
+    TikTokUserLikedIE,
     TikTokSoundIE,
     TikTokEffectIE,
     TikTokTagIE,
