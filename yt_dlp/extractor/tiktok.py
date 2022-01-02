@@ -16,6 +16,7 @@ from ..utils import (
     str_or_none,
     traverse_obj,
     try_get,
+    urlencode_postdata,
     url_or_none,
     qualities,
 )
@@ -31,7 +32,7 @@ class TikTokBaseIE(InfoExtractor):
     _WEBPAGE_HOST = 'https://www.tiktok.com/'
     QUALITIES = ('360p', '540p', '720p')
 
-    def _call_api(self, ep, query, video_id, fatal=True,
+    def _call_api(self, ep, query, video_id, fatal=True, data=None,
                   note='Downloading API JSON', errnote='Unable to download API page'):
         real_query = {
             **query,
@@ -77,7 +78,7 @@ class TikTokBaseIE(InfoExtractor):
             fatal=fatal, note=note, errnote=errnote, headers={
                 'User-Agent': f'com.ss.android.ugc.trill/{self._MANIFEST_APP_VERSION} (Linux; U; Android 10; en_US; Pixel 4; Build/QQ3A.200805.001; Cronet/58.0.2991.0)',
                 'Accept': 'application/json',
-            }, query=real_query)
+            }, data=data, query=real_query)
 
     def _parse_aweme_video_app(self, aweme_detail):
         aweme_id = aweme_detail['aweme_id']
@@ -404,7 +405,7 @@ class TikTokIE(TikTokBaseIE):
             self.report_warning(f'{e}; Retrying with feed workaround')
             feed_list = self._call_api('feed', {'aweme_id': aweme_id}, aweme_id,
                                        note='Downloading video feed', errnote='Unable to download video feed').get('aweme_list') or []
-            aweme_detail = next(aweme for aweme in feed_list if str(aweme.get('aweme_id')) == aweme_id)
+            aweme_detail = any(aweme for aweme in feed_list if str(aweme.get('aweme_id')) == aweme_id)
             if not aweme_detail:
                 raise ExtractorError('Unable to find video in feed', video_id=aweme_id)
         return self._parse_aweme_video_app(aweme_detail)
@@ -724,6 +725,21 @@ class DouyinIE(TikTokIE):
     _API_HOSTNAME = 'aweme.snssdk.com'
     _UPLOADER_URL_FORMAT = 'https://www.douyin.com/user/%s'
     _WEBPAGE_HOST = 'https://www.douyin.com/'
+
+    def _extract_aweme_app(self, aweme_id):
+        try:
+            aweme_detail = self._call_api('aweme/detail', {'aweme_id': aweme_id}, aweme_id,
+                                          note='Downloading video details', errnote='Unable to download video details').get('aweme_detail')
+            if not aweme_detail:
+                raise ExtractorError('Video not available', video_id=aweme_id)
+        except ExtractorError as e:
+            self.report_warning(f'{e}; Retrying with list workaround')
+            video_list = self._call_api('multi/aweme/detail', {}, aweme_id, data=urlencode_postdata({'aweme_ids': f'%5B{aweme_id}%5D'}),
+                                       note='Downloading video list', errnote='Unable to download video list').get('aweme_list') or []
+            aweme_detail = any(aweme for aweme in video_list if str(aweme.get('aweme_id')) == aweme_id)
+            if not aweme_detail:
+                raise ExtractorError('Unable to find video in video list', video_id=aweme_id)
+        return self._parse_aweme_video_app(aweme_detail)
 
     def _real_extract(self, url):
         video_id = self._match_id(url)
