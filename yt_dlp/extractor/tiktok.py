@@ -821,9 +821,10 @@ class DouyinIE(TikTokIE):
 
 
 class TikTokShareIE(InfoExtractor):
+    # Remove this IE when TikTok webpage downloading is fixed
     _VALID_URL = r'https?://(?:vm|vt)\.tiktok\.com/(?P<id>\w+)'
     IE_NAME = 'tiktok:share'
-    IE_DESC = 'Workaround for vm.tiktok.com or vt.tiktok.com'
+    IE_DESC = 'vm.tiktok.com or vt.tiktok.com'
 
     _TESTS = [{
         'url': 'https://vm.tiktok.com/ZSe4FqkKd',
