@@ -820,9 +820,10 @@ class DouyinIE(TikTokIE):
             traverse_obj(render_data, (..., 'aweme', 'detail'), get_all=False), url)
 
 
-class TikTokVMIE(InfoExtractor):
+class TikTokShareIE(InfoExtractor):
     _VALID_URL = r'https?://(?:vm|vt)\.tiktok\.com/(?P<id>\w+)'
-    IE_NAME = 'vm.tiktok'
+    IE_NAME = 'tiktok:share'
+    IE_DESC = 'Workaround for vm.tiktok.com or vt.tiktok.com'
 
     _TESTS = [{
         'url': 'https://vm.tiktok.com/ZSe4FqkKd',
@@ -849,8 +850,11 @@ class TikTokVMIE(InfoExtractor):
     }, {
         'url': 'https://vt.tiktok.com/ZSe4FqkKd',
         'only_matching': True,
+    }, {
+        'url': 'https://vt.tiktok.com/ZSenGf2VF/',
+        'only_matching': True,
     }]
 
     def _real_extract(self, url):
         return self.url_result(self._request_webpage(
-            HEADRequest(url), self._match_id(url), headers={'User-Agent': 'facebookexternalhit/1.1'}).geturl(), TikTokIE)
+            HEADRequest(url), self._match_id(url), headers={'User-Agent': 'facebookexternalhit/1.1'}).geturl())
