@@ -630,7 +630,7 @@ class InstagramStoryIE(InstagramBaseIE):
     def _real_extract(self, url):
         username, story_id = self._match_valid_url(url).groups()
 
-        story_info_url = f'{username}/{story_id}/?__a=1' if username == 'highlights' else f'{username}/?__a=1'
+        story_info_url = f'{username}/{story_id}/?__a=1&__d=dis' if username == 'highlights' else f'{username}/?__a=1&__d=dis'
         story_info = self._download_json(f'https://www.instagram.com/stories/{story_info_url}', story_id, headers={
             'X-IG-App-ID': 936619743392459,
             'X-ASBD-ID': 198387,
