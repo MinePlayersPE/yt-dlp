@@ -38,6 +38,36 @@ class RobloxIE(InfoExtractor):
             'modified_timestamp': 1656694893
         },
     }]
+        def _get_comments(self, video_id):
+     start_index = 0
+     comments = []
+     while True:
+        # Download the comments info in JSON format
+        comments_info = self._download_json(
+            f'https://www.roblox.com/comments/get-json?assetId={video_id}&startindex={start_index}&thumbnailWidth=100&thumbnailHeight=100&thumbnailFormat=PNG&cachebuster=3086', 
+            video_id,
+            fatal=False, errnote='Comments extraction failed', note='Downloading comments', headers=self._API_HEADERS) or {}
+        # Extract the list of comments from the JSON data
+        comment_data = traverse_obj(comments_info, ('Comments'))
+        if not comment_data:
+            # If there are no more comments, exit the loop
+            break
+        # Iterate through the list of comments and extract the relevant information
+        for comment_dict in comment_data:
+            comments.append({
+                'author': traverse_obj(comment_dict, ('AuthorName')),
+                'author_id': traverse_obj(comment_dict, ('AuthorId')),
+                'id': traverse_obj(comment_dict, ('Id')),
+                'text': traverse_obj(comment_dict, ('Text')),
+                'time_text': traverse_obj(comment_dict, ('PostedDate')),
+                'author_thumbnail': traverse_obj(comment_dict, ('AuthorThumbnail', 'Url')),
+                'author_is_verified': traverse_obj(comment_dict, ('HasVerifiedBadge')),
+                'author_is_subscribed': traverse_obj(comment_dict, ('ShowAuthorOwnsAsset')),
+            })
+
+        # Increment the start index to download the next batch of comments
+        start_index += 10
+    return comments
 
     def _real_extract(self, url):
         asset_id = self._match_id(url)
